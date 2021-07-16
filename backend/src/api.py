@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, abort
 from sqlalchemy import exc
 import json
 from flask_cors import CORS
+from sqlalchemy.sql.expression import insert
 
 from .database.models import db_drop_and_create_all, setup_db, Drink
 from .auth.auth import AuthError, requires_auth
@@ -17,7 +18,7 @@ CORS(app)
 !! NOTE THIS MUST BE UNCOMMENTED ON FIRST RUN
 !! Running this funciton will add one
 '''
-# db_drop_and_create_all()
+db_drop_and_create_all()
 
 # ROUTES
 '''
@@ -28,7 +29,18 @@ CORS(app)
     returns status code 200 and json {"success": True, "drinks": drinks} where drinks is the list of drinks
         or appropriate status code indicating reason for failure
 '''
+@app.route('/drinks')
+def get_drinks():
+    drinks = Drink.query.all()
 
+    drinks_list = []
+    for drink in drinks:
+        drinks_list.append(drink.short())
+
+    return jsonify({
+        'success': True,
+        'drinks': drinks_list
+    }), 200
 
 '''
 @TODO implement endpoint
@@ -38,7 +50,19 @@ CORS(app)
     returns status code 200 and json {"success": True, "drinks": drinks} where drinks is the list of drinks
         or appropriate status code indicating reason for failure
 '''
+@app.route('/drinks-detail')
+@requires_auth('get:drinks-detail')
+def get_drinks_detail(t):
+    drinks = Drink.query.all()
 
+    drinks_list = []
+    for drink in drinks:
+        drinks_list.append(drink.long())
+
+    return jsonify({
+        'success': True,
+        'drinks': drinks_list
+    }), 200
 
 '''
 @TODO implement endpoint
@@ -49,6 +73,24 @@ CORS(app)
     returns status code 200 and json {"success": True, "drinks": drink} where drink an array containing only the newly created drink
         or appropriate status code indicating reason for failure
 '''
+@app.route('/drinks', methods=["POST"])
+@requires_auth('post:drinks')
+def add_drink(t):
+    inputs_json = request.get_json()
+
+    drink = Drink(title=inputs_json['title'], recipe=json.dumps(inputs_json['recipe']))
+    try:
+        drink.insert()
+        return jsonify({
+            'success': True,
+            'drinks': [drink.long()]
+        }), 200
+    except:
+        return jsonify({
+            'success': False,
+            'error': "Error!"
+        }), 422
+
 
 
 '''
@@ -62,7 +104,22 @@ CORS(app)
     returns status code 200 and json {"success": True, "drinks": drink} where drink an array containing only the updated drink
         or appropriate status code indicating reason for failure
 '''
+@app.route('/drinks/<int:id>', methods=['PATCH'])
+@requires_auth('patch:drinks')
+def edit_drink(t, id):
+    drink = Drink.query.filter(Drink.id == id).one_or_none()
+    if drink is None:
+        abort(404)
 
+    inputs_json = request.get_json()
+    drink.title = inputs_json['title']
+    drink.recipe = json.dumps(inputs_json['recipe'])
+
+    drink.update()
+    return jsonify({
+        'success': True,
+        'drinks': [drink.long()]
+    }), 200
 
 '''
 @TODO implement endpoint
@@ -74,7 +131,19 @@ CORS(app)
     returns status code 200 and json {"success": True, "delete": id} where id is the id of the deleted record
         or appropriate status code indicating reason for failure
 '''
+@app.route('/drinks/<int:id>', methods=['DELETE'])
+@requires_auth('delete:drinks')
+def edit_drink(t, id):
+    drink = Drink.query.filter(Drink.id == id).one_or_none()
+    if drink is None:
+        abort(404)
 
+    drink.delete()
+
+    return jsonify({
+        'success': True,
+        'delete': id
+    }), 200
 
 # Error Handling
 '''
@@ -106,9 +175,20 @@ def unprocessable(error):
 @TODO implement error handler for 404
     error handler should conform to general task above
 '''
-
+@app.errorhandler(404)
+def notFound(error):
+    return jsonify({
+        "success": False,
+        "error": 404,
+        "message": "Resource not found"
+    }), 404
 
 '''
 @TODO implement error handler for AuthError
     error handler should conform to general task above
 '''
+@app.errorhandler(AuthError)
+def AuthErrorP(error):
+    response = jsonify(error.error)
+    response.status_code = error.status_code
+    return response
