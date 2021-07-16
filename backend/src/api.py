@@ -133,7 +133,7 @@ def edit_drink(t, id):
 '''
 @app.route('/drinks/<int:id>', methods=['DELETE'])
 @requires_auth('delete:drinks')
-def edit_drink(t, id):
+def delete_drink(t, id):
     drink = Drink.query.filter(Drink.id == id).one_or_none()
     if drink is None:
         abort(404)
