@@ -1,4 +1,5 @@
 import os
+import re
 from flask import Flask, request, jsonify, abort
 from sqlalchemy import exc
 import json
@@ -32,7 +33,6 @@ db_drop_and_create_all()
 @app.route('/drinks')
 def get_drinks():
     drinks = Drink.query.all()
-
     drinks_list = []
     for drink in drinks:
         drinks_list.append(drink.short())
@@ -77,8 +77,11 @@ def get_drinks_detail(t):
 @requires_auth('post:drinks')
 def add_drink(t):
     inputs_json = request.get_json()
+    recipe = inputs_json['recipe']
+    if type(recipe) is dict:
+        recipe = [recipe]
 
-    drink = Drink(title=inputs_json['title'], recipe=json.dumps(inputs_json['recipe']))
+    drink = Drink(title=inputs_json['title'], recipe=json.dumps(recipe))
     try:
         drink.insert()
         return jsonify({
@@ -89,7 +92,7 @@ def add_drink(t):
         return jsonify({
             'success': False,
             'error': "Error!"
-        }), 422
+        }), 403
 
 
 
@@ -112,8 +115,10 @@ def edit_drink(t, id):
         abort(404)
 
     inputs_json = request.get_json()
-    drink.title = inputs_json['title']
-    drink.recipe = json.dumps(inputs_json['recipe'])
+    if 'title' in inputs_json:
+        drink.title = inputs_json['title']
+    if 'recipe' in inputs_json:
+        drink.recipe = json.dumps(inputs_json['recipe'])
 
     drink.update()
     return jsonify({
